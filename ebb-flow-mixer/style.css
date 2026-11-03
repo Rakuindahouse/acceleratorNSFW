@@ -6,7 +6,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
-canvas#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+canvas#view { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; object-fit: contain; background: #000; }
 
 body.dragging::after {
   content: "ここにドロップして追加";

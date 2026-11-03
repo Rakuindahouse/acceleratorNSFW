@@ -56,10 +56,19 @@
 複数の Spout ソースを使う場合は SpoutCam を複数登録してください（SpoutCam1〜4）。
 OBS の「仮想カメラ」も同じ手順で使えます。
 
-## 出力を他のアプリに渡す
+## Spout / NDI で出力する
 
-OBS で このブラウザウィンドウをキャプチャ → OBS の Spout2 プラグイン / 仮想カメラ で送れます。
-`H` でパネルを隠し、`F` で全画面にしてから使ってください。
+ブラウザは直接 Spout / NDI を送れないので、OBS を経由します。
+
+1. `start.bat` で起動（裏に隠れても描画が止まらない専用ウィンドウで開きます）
+2. 「出力」で解像度（例: 1920 × 1080）を選び、「出力ウィンドウ」を押す → 映像だけのウィンドウが開く
+3. OBS で「ウィンドウキャプチャ」→ `ebb flow output` を選択（キャプチャ方式は「Windows 10 (1903以降)」）
+4. 送り出し
+   - **Spout**: OBS に [Spout2 プラグイン](https://github.com/Off-World-Live/obs-spout2-plugin) を入れ、ツール → Spout Output Settings → Start
+   - **NDI**: OBS に [DistroAV (旧 obs-ndi)](https://github.com/DistroAV/DistroAV) と NDI Runtime を入れ、ツール → DistroAV NDI Settings → Main Output をオン
+
+操作は元のウィンドウで行い、出力ウィンドウには操作パネルが映りません。
+OBS のキャンバス解像度を出力解像度と合わせると綺麗に出ます。
 
 ## 素材について
 

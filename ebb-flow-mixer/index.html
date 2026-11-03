@@ -23,6 +23,23 @@
   </header>
 
   <section>
+    <h2>出力</h2>
+    <div class="row">
+      <select id="outRes">
+        <option value="window">解像度：ウィンドウに合わせる</option>
+        <option value="1280x720">1280 × 720</option>
+        <option value="1920x1080">1920 × 1080</option>
+        <option value="2560x1440">2560 × 1440</option>
+        <option value="3840x2160">3840 × 2160</option>
+        <option value="1080x1920">1080 × 1920（縦）</option>
+        <option value="1080x1080">1080 × 1080（正方形）</option>
+      </select>
+      <button id="btnOut">出力ウィンドウ</button>
+    </div>
+    <p class="hint">出力ウィンドウには映像だけが出ます（ダブルクリックで全画面）。OBS でキャプチャして Spout / NDI へ。</p>
+  </section>
+
+  <section>
     <h2>ソース</h2>
     <div class="row">
       <label class="btn">画像・動画を追加<input id="fileInput" type="file" accept="image/*,video/*" multiple hidden></label>

@@ -58,6 +58,7 @@ function defaults() {
   for (const p of PARAMS) S[p[1]] = p[6];
   Object.assign(S, COLOR_KEYS);
   S.builtin = { materials: true, 'sea-blue': true, 'sea-white': true };
+  S.outRes = 'window';
 }
 defaults();
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
@@ -199,7 +200,9 @@ function makeTarget() {
 }
 function resize() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.max(2, Math.round(innerWidth * dpr)), h = Math.max(2, Math.round(innerHeight * dpr));
+  let w = Math.max(2, Math.round(innerWidth * dpr)), h = Math.max(2, Math.round(innerHeight * dpr));
+  const fixed = /^(\d+)x(\d+)$/.exec(S.outRes || '');
+  if (fixed) { w = +fixed[1]; h = +fixed[2]; }
   if (w === W && h === H) return;
   W = canvas.width = w; H = canvas.height = h;
   for (const k of ['scene', 'fbA', 'fbB']) {
@@ -483,6 +486,16 @@ function frame() {
   gl.uniform3fv(u.uMapA, hex(S.mapA)); gl.uniform3fv(u.uMapB, hex(S.mapB)); gl.uniform3fv(u.uMapC, hex(S.mapC)); gl.uniform3fv(u.uTint, hex(S.tint));
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
+  // 出力ウィンドウへコピー（描画直後なので preserveDrawingBuffer 不要）
+  if (outCtx) {
+    if (outWin.closed) { outWin = outCtx = null; $('#btnOut').classList.remove('on'); }
+    else {
+      const oc = outCtx.canvas;
+      if (oc.width !== W || oc.height !== H) { oc.width = W; oc.height = H; }
+      outCtx.drawImage(canvas, 0, 0);
+    }
+  }
+
   if (shotPending) {
     shotPending = false;
     canvas.toBlob((b) => {
@@ -525,6 +538,7 @@ function fmt(v, step) { return step >= 1 ? String(Math.round(v)) : (+v).toFixed(
 function syncUi() {
   for (const [k, e] of Object.entries(sliderEls)) { e.input.value = S[k]; e.out.textContent = fmt(S[k], e.step); }
   for (const k of Object.keys(COLOR_KEYS)) $('#' + k).value = S[k];
+  $('#outRes').value = S.outRes;
   renderBuiltinList();
 }
 
@@ -606,6 +620,28 @@ $('#toggleUi').onclick = toggleUi;
 $('#btnFull').onclick = toggleFull;
 $('#btnNext').onclick = () => nextLayout();
 $('#btnShot').onclick = () => { shotPending = true; };
+
+// 出力ウィンドウ：映像だけを別ウィンドウに出す（OBS のウィンドウキャプチャ → Spout2 / NDI 用）
+let outWin = null, outCtx = null;
+function openOutput() {
+  if (outWin && !outWin.closed) { outWin.focus(); return; }
+  const dpr = window.devicePixelRatio || 1;
+  outWin = window.open('', 'ebb-flow-output', `popup=yes,width=${Math.round(W / dpr)},height=${Math.round(H / dpr)}`);
+  if (!outWin) { alert('ポップアップがブロックされました。アドレスバー右のアイコンから許可してください。'); return; }
+  const d = outWin.document;
+  d.title = 'ebb flow output';
+  d.body.innerHTML = '';
+  d.body.style.cssText = 'margin:0;background:#000;overflow:hidden;cursor:none';
+  const c = d.createElement('canvas');
+  c.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block;object-fit:contain';
+  d.body.appendChild(c);
+  outCtx = c.getContext('2d', { alpha: false });
+  d.addEventListener('dblclick', () => (d.fullscreenElement ? d.exitFullscreen() : d.documentElement.requestFullscreen()));
+  $('#btnOut').classList.add('on');
+}
+$('#btnOut').onclick = openOutput;
+$('#outRes').addEventListener('change', (e) => { S.outRes = e.target.value; save(); resize(); nextLayout(0); });
+addEventListener('beforeunload', () => { if (outWin && !outWin.closed) outWin.close(); });
 const burstBtn = $('#btnBurst');
 const setBurst = (on) => { burst = on; burstBtn.classList.toggle('on', on); };
 burstBtn.addEventListener('pointerdown', () => setBurst(true));
