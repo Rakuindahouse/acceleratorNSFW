@@ -60,6 +60,8 @@ function defaults() {
   Object.assign(S, COLOR_KEYS);
   S.builtin = { materials: true, 'sea-blue': true, 'sea-white': true };
   S.outRes = 'window';
+  S.spoutMax = 1280;
+  S.spoutFlip = false;
 }
 defaults();
 try { Object.assign(S, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
@@ -98,7 +100,7 @@ const panelProg = compile(VS, `#version 300 es
 precision highp float;
 in vec2 vUv; out vec4 o;
 uniform sampler2D uTex;
-uniform float uTexAspect, uScrAspect, uZoom, uTime, uWarp, uSeed, uAlpha, uRot, uGain;
+uniform float uTexAspect, uScrAspect, uZoom, uTime, uWarp, uSeed, uAlpha, uRot, uGain, uFlip;
 uniform vec2 uOffset, uDrift;
 void main(){
   vec2 s = vec2(uScrAspect, 1.0), t = vec2(uTexAspect, 1.0);
@@ -111,6 +113,7 @@ void main(){
   uv += w * vec2(
     0.030*sin(uv.y*6.0 + uTime*1.3 + uSeed) + 0.012*sin(uv.y*17.0 - uTime*2.1 + uSeed*3.0),
     0.030*cos(uv.x*5.0 - uTime*1.1 + uSeed*2.0) + 0.012*cos(uv.x*15.0 + uTime*1.7 + uSeed));
+  if (uFlip > 0.5) uv.y = 1.0 - uv.y;
   o = vec4(texture(uTex, uv).rgb * uGain, uAlpha);
 }`);
 
@@ -276,6 +279,7 @@ function removeSource(src) {
   if (i < 0) return;
   sources.splice(i, 1);
   if (src.stream) src.stream.getTracks().forEach((t) => t.stop());
+  if (src.kind === 'spout') { spSlots.delete(src.slot); spSend({ type: 'unsubscribe', slot: src.slot }); }
   if (src.kind === 'video') { src.el.pause(); URL.revokeObjectURL(src.el.src); }
   if (src.kind === 'image' && src.el.src.startsWith('blob:')) URL.revokeObjectURL(src.el.src);
   gl.deleteTexture(src.tex);
@@ -285,7 +289,7 @@ function removeSource(src) {
 
 function updateVideoTextures() {
   for (const s of sources) {
-    if (s.kind === 'image' || !s.enabled) continue;
+    if (!s.el || s.kind === 'image' || !s.enabled) continue;
     const v = s.el;
     if (v.readyState >= 2 && v.videoWidth) {
       uploadTexture(s.tex, v);
@@ -421,6 +425,7 @@ function drawLayout(L, alpha) {
     gl.uniform1f(u.uAlpha, alpha);
     gl.uniform1f(u.uRot, live ? 0 : p.rot);
     gl.uniform1f(u.uGain, live ? 1 : p.gain);
+    gl.uniform1f(u.uFlip, s.flip ? 1 : 0);
     gl.uniform2f(u.uOffset, live ? 0 : p.offset[0], live ? 0 : p.offset[1]);
     gl.uniform2f(u.uDrift, live ? 0 : p.drift[0], live ? 0 : p.drift[1]);
     bindPos(p.buf);
@@ -513,6 +518,13 @@ function frame() {
     }
   }
 
+  // Spout 出力：受信アプリへ今のフレームを送る（前のが送り終わってから）
+  if (spOut.enabled && spWs && spWs.readyState === 1 && !spOut.busy && spWs.bufferedAmount < 2e6) {
+    spOut.busy = true;
+    // 描画直後に切り取り、JPEG 化はワーカーで（描画が忙しくても遅れないように）
+    createImageBitmap(canvas).then((bmp) => spEncoder().postMessage(bmp, [bmp])).catch(() => { spOut.busy = false; });
+  }
+
   if (shotPending) {
     shotPending = false;
     canvas.toBlob((b) => {
@@ -584,12 +596,21 @@ function renderUserList() {
     cb.onchange = () => { s.enabled = cb.checked; renderUserList(); nextLayout(0.3); };
     let thumb;
     if (s.kind === 'image') { thumb = document.createElement('img'); thumb.src = s.el.src; }
-    else { thumb = document.createElement('div'); thumb.className = 'thumb'; thumb.textContent = s.kind === 'camera' ? ' 📷' : ' ▶'; }
+    else { thumb = document.createElement('div'); thumb.className = 'thumb'; thumb.textContent = { camera: ' 📷', spout: ' S' }[s.kind] || ' ▶'; }
     const name = document.createElement('span');
     name.className = 'name'; name.textContent = s.name; name.title = s.name;
     const rm = document.createElement('button');
     rm.textContent = '×'; rm.title = '削除'; rm.onclick = () => removeSource(s);
-    row.append(cb, thumb, name, rm);
+    row.append(cb, thumb, name);
+    if (s.kind !== 'image') {
+      // ライブ映像の上下反転
+      const fl = document.createElement('button');
+      fl.textContent = '⇅'; fl.title = '上下反転';
+      fl.classList.toggle('on', !!s.flip);
+      fl.onclick = () => { s.flip = !s.flip; fl.classList.toggle('on', s.flip); };
+      row.append(fl);
+    }
+    row.append(rm);
     box.appendChild(row);
   }
 }
@@ -868,6 +889,150 @@ function drawMeter(a) {
   mctx.fillStyle = a.flash > 0 ? `rgba(255,255,255,${a.flash})` : '#1c2530';
   mctx.fillRect(meter.width - 28, 0, 28, meter.height);
 }
+
+// ---------------------------------------------------------------- Spout（受信アプリ経由）
+// NSFWaccelerator-Spout.exe と WebSocket でつなぎ、Spout の受信と送信をしてもらう
+const SPOUT_URL = 'ws://127.0.0.1:8790';
+let spWs = null, spWant = false, spNextSlot = 1, spQuiet = false;
+const spSlots = new Map(); // slot -> source
+const spOut = { enabled: false, busy: false };
+
+function spSend(msg) { if (spWs && spWs.readyState === 1) spWs.send(JSON.stringify(msg)); }
+function spStatus(text) { const el = $('#spoutStatus'); el.hidden = !text; el.textContent = text; }
+
+function spConnect(quiet = false) {
+  spWant = true;
+  spQuiet = quiet === true;
+  if (spWs && spWs.readyState <= 1) return;
+  if (!spQuiet) spStatus('受信アプリに接続中…');
+  const ws = new WebSocket(SPOUT_URL);
+  ws.binaryType = 'arraybuffer';
+  spWs = ws;
+  ws.onopen = () => {
+    spQuiet = false;
+    spStatus('受信アプリに接続しました');
+    $('#spoutPick').hidden = false;
+    $('#btnSpout').classList.add('on');
+    for (const [slot, s] of spSlots) spSend({ type: 'subscribe', slot, name: s.spoutName, maxWidth: +S.spoutMax });
+    spSendOutput();
+  };
+  ws.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      const m = JSON.parse(e.data);
+      if (m.type === 'senders') spRenderSenders(m.list);
+      return;
+    }
+    const u8 = new Uint8Array(e.data);
+    if (u8[0] !== 1) return;
+    const s = spSlots.get(u8[1]);
+    if (!s) return;
+    const blob = new Blob([u8.subarray(2)], { type: 'image/jpeg' });
+    if (s.decoding) { s.pending = blob; return; }
+    spDecode(s, blob);
+  };
+  ws.onclose = () => {
+    if (spWs !== ws) return;
+    spWs = null;
+    $('#btnSpout').classList.remove('on');
+    if (spQuiet) { spWant = false; spQuiet = false; return; } // 起動時のお試し接続は静かに諦める
+    spStatus('受信アプリ（NSFWaccelerator-Spout.exe）が起動していません。起動すると自動でつながります。');
+    if (spWant) setTimeout(() => { if (spWant) spConnect(); }, 2000);
+  };
+}
+
+async function spDecode(s, blob) {
+  s.decoding = true;
+  try {
+    // ImageBitmap は UNPACK_FLIP_Y が効かないので、ここで上下を合わせておく
+    const bmp = await createImageBitmap(blob, { imageOrientation: 'flipY' });
+    if (sources.includes(s)) {
+      uploadTexture(s.tex, bmp);
+      s.aspect = bmp.width / bmp.height;
+      s.ready = true;
+    }
+    bmp.close();
+  } catch (e) { /* 壊れたフレームは捨てる */ }
+  s.decoding = false;
+  if (s.pending) { const b = s.pending; s.pending = null; spDecode(s, b); }
+}
+
+function spRenderSenders(list) {
+  const sel = $('#spoutSelect');
+  const keep = sel.value;
+  sel.innerHTML = '';
+  if (!list.length) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '（Spout の送信がありません）';
+    sel.appendChild(o);
+  }
+  for (const n of list) {
+    const o = document.createElement('option');
+    o.value = n; o.textContent = n;
+    sel.appendChild(o);
+  }
+  if (list.includes(keep)) sel.value = keep;
+}
+
+function spAdd(name) {
+  if (!name) return;
+  const slot = spNextSlot;
+  spNextSlot = (spNextSlot % 255) + 1;
+  const s = { id: nextId++, name: 'Spout: ' + name, spoutName: name, kind: 'spout', tex: newTexture(gl.MIRRORED_REPEAT), aspect: 16 / 9, ready: false, enabled: true, slot, flip: false };
+  sources.push(s);
+  spSlots.set(slot, s);
+  spSend({ type: 'subscribe', slot, name, maxWidth: +S.spoutMax });
+  renderUserList();
+  nextLayout(0.3);
+}
+
+let spWorker = null;
+function spEncoder() {
+  if (spWorker) return spWorker;
+  const code = `
+    let oc = null, ctx = null;
+    onmessage = async (e) => {
+      const bmp = e.data;
+      if (!oc || oc.width !== bmp.width || oc.height !== bmp.height) {
+        oc = new OffscreenCanvas(bmp.width, bmp.height);
+        ctx = oc.getContext('2d', { alpha: false });
+      }
+      ctx.drawImage(bmp, 0, 0);
+      bmp.close();
+      const blob = await oc.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+      const buf = await blob.arrayBuffer();
+      postMessage(buf, [buf]);
+    };`;
+  spWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'text/javascript' })));
+  spWorker.onmessage = (e) => {
+    if (spWs && spWs.readyState === 1) spWs.send(new Blob([new Uint8Array([2]), e.data]));
+    spOut.busy = false;
+  };
+  spWorker.onerror = () => { spOut.busy = false; };
+  return spWorker;
+}
+
+function spSendOutput() { spSend({ type: 'output', enabled: spOut.enabled, name: 'NSFWaccelerator', flip: !!S.spoutFlip }); }
+
+$('#btnSpout').onclick = () => spConnect();
+$('#btnSpoutAdd').onclick = () => spAdd($('#spoutSelect').value);
+$('#spoutMax').addEventListener('change', (e) => {
+  S.spoutMax = +e.target.value; save();
+  for (const [slot, s] of spSlots) spSend({ type: 'subscribe', slot, name: s.spoutName, maxWidth: +S.spoutMax });
+});
+$('#btnSpoutOut').onclick = () => {
+  spOut.enabled = !spOut.enabled;
+  $('#btnSpoutOut').classList.toggle('on', spOut.enabled);
+  if (spOut.enabled) spConnect();
+  spSendOutput();
+};
+$('#btnSpoutFlip').onclick = () => {
+  S.spoutFlip = !S.spoutFlip; save();
+  $('#btnSpoutFlip').classList.toggle('on', S.spoutFlip);
+  spSendOutput();
+};
+$('#spoutMax').value = String(S.spoutMax);
+$('#btnSpoutFlip').classList.toggle('on', !!S.spoutFlip);
+spConnect(true); // 受信アプリがすでに起動していれば自動でつなぐ
 
 // ---------------------------------------------------------------- 起動
 buildSliders();

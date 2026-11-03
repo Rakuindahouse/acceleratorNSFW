@@ -10,6 +10,11 @@ if not exist "%~dp0index.html" (
   exit /b 1
 )
 
+rem Start the Spout bridge too, if it is here
+if exist "%~dp0NSFWaccelerator-Spout.exe" (
+  tasklist /FI "IMAGENAME eq NSFWaccelerator-Spout.exe" | find /I "NSFWaccelerator-Spout.exe" >nul || start "NSFWaccelerator Spout" "%~dp0NSFWaccelerator-Spout.exe"
+)
+
 set "BROWSER="
 for %%P in ("%ProgramFiles%\Google\Chrome\Application\chrome.exe" "%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe" "%LocalAppData%\Google\Chrome\Application\chrome.exe" "%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe" "%ProgramFiles%\Microsoft\Edge\Application\msedge.exe") do (
   if not defined BROWSER if exist "%%~P" set "BROWSER=%%~P"

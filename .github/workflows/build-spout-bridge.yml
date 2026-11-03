@@ -1,0 +1,60 @@
+name: Build Spout bridge
+
+on:
+  push:
+    paths:
+      - 'spout-bridge/**'
+      - '.github/workflows/build-spout-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: pip install -r spout-bridge/requirements.txt
+
+      - name: Check that the Spout library loads
+        run: python -c "import SpoutGL; r = SpoutGL.SpoutReceiver(); print('senders:', r.getSenderList())"
+
+      - name: Build exe
+        run: pyinstaller --onefile --console --name NSFWaccelerator-Spout --collect-all SpoutGL --collect-all simplejpeg spout-bridge/bridge.py
+
+      - name: Smoke test
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          $p = Start-Process -FilePath dist\NSFWaccelerator-Spout.exe -RedirectStandardOutput out.txt -RedirectStandardError err.txt -PassThru
+          Start-Sleep -Seconds 8
+          python spout-bridge/smoke_test.py out.txt
+          $code = $LASTEXITCODE
+          Stop-Process -Id $p.Id -Force
+          Get-Content err.txt
+          exit $code
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NSFWaccelerator-Spout
+          path: dist/NSFWaccelerator-Spout.exe
+
+      - name: Put the exe into the branch
+        shell: bash
+        run: |
+          cp dist/NSFWaccelerator-Spout.exe NSFWaccelerator/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add NSFWaccelerator/NSFWaccelerator-Spout.exe
+          git commit -m "Build NSFWaccelerator-Spout.exe" || exit 0
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

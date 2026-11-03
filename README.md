@@ -3,7 +3,8 @@
 文化祭用の映像ミキサー（一回きりの使用予定）。
 [ebb and flow](https://htg0707kym-lgtm.github.io/ebb-and-flow-artwork/) をベースに、画面を斜めに分割したパネルに素材を流し、音に合わせて動かしながら全体の色を変えられます。
 
-アプリ本体は [`NSFWaccelerator/`](NSFWaccelerator/) フォルダです。詳しい説明は [NSFWaccelerator/README.md](NSFWaccelerator/README.md) を見てください。
+アプリ本体は [`NSFWaccelerator/`](NSFWaccelerator/) フォルダです。
+Spout の受信・送信をする `NSFWaccelerator-Spout.exe` のソースは [`spout-bridge/`](spout-bridge/) にあり、GitHub Actions で自動的に exe にして `NSFWaccelerator/` に置かれます。詳しい説明は [NSFWaccelerator/README.md](NSFWaccelerator/README.md) を見てください。
 
 ## 起動
 
@@ -14,10 +15,10 @@
 
 ## できること
 
-- **素材**：好きな画像・動画、Spout（SpoutCam 経由）、カメラ、元サイトの画像 136 枚
+- **素材**：好きな画像・動画、Spout（付属の受信アプリで直接・何本でも）、カメラ、元サイトの画像 136 枚
 - **音**：マイク / ライン入力、PCの音、音声ファイル。ビートで切替、低音でうねり、音量で流速など
 - **色**：プリセット（原作 青と白・深海・夕凪・桜・緑青・金・墨・ネオン・反転）と色相・彩度・3色の色置換など
-- **出力**：映像だけの出力ウィンドウ（解像度固定可）→ OBS 経由で Spout / NDI
+- **出力**：Spout で直接出力（名前「NSFWaccelerator」）、映像だけの出力ウィンドウ（NDI は OBS 経由）
 - **操作専用モード**：出力中は操作ウィンドウを縦長にして Resolume などの横に置ける
 
 ## キー操作

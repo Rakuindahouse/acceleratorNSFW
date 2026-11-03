@@ -41,20 +41,40 @@
       </select>
       <button id="btnOut">出力ウィンドウ</button>
     </div>
-    <p class="hint">出力ウィンドウには映像だけが出ます（ダブルクリックで全画面）。OBS でキャプチャして Spout / NDI へ。</p>
+    <div class="row">
+      <button id="btnSpoutOut">Spout出力</button>
+      <button id="btnSpoutFlip">上下反転</button>
+    </div>
+    <p class="hint">出力ウィンドウには映像だけが出ます（ダブルクリックで全画面）。Spout出力は受信アプリ経由で「NSFWaccelerator」という名前で送ります。NDI は OBS 経由。</p>
   </section>
 
   <section>
     <h2>ソース</h2>
     <div class="row">
       <label class="btn">画像・動画を追加<input id="fileInput" type="file" accept="image/*,video/*" multiple hidden></label>
-      <button id="btnCam">Spout / カメラ</button>
+      <button id="btnSpout">Spout</button>
+      <button id="btnCam">カメラ</button>
     </div>
+    <div id="spoutPick" hidden>
+      <div class="row">
+        <select id="spoutSelect"></select>
+        <button id="btnSpoutAdd">追加</button>
+      </div>
+      <div class="row">
+        <select id="spoutMax">
+          <option value="960">受信画質：軽い</option>
+          <option value="1280">受信画質：標準</option>
+          <option value="1920">受信画質：高い</option>
+          <option value="4096">受信画質：最高</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint" id="spoutStatus" hidden></p>
     <div id="camPick" class="row" hidden>
       <select id="camSelect"></select>
       <button id="btnCamAdd">追加</button>
     </div>
-    <p class="hint">ドラッグ＆ドロップ・貼り付けでも追加できます。Spout は SpoutCam 経由で「カメラ」として選べます。</p>
+    <p class="hint">ドラッグ＆ドロップ・貼り付けでも追加できます。Spout は受信アプリ（NSFWaccelerator-Spout.exe）を起動してから「Spout」を押します。</p>
     <div id="builtinList" class="list"></div>
     <div id="userList" class="list"></div>
     <div id="sliders-source"></div>
