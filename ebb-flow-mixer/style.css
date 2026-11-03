@@ -72,3 +72,15 @@ audio { width: 100%; height: 32px; margin-bottom: 8px; }
 .meter { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .meter canvas { width: 150px; height: 18px; background: #0b1018; border-radius: 3px; flex: none; }
 .meter span { color: #8b9cae; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 操作専用モード（出力ウィンドウ使用中） */
+html.control { height: auto; overflow-x: hidden; overflow-y: auto; background: #080b10; }
+html.control body { height: auto; overflow: visible; background: #080b10; }
+html.control canvas#view { position: sticky; top: 0; z-index: 5; width: 100%; height: auto; border-bottom: 1px solid #26313e; }
+html.control.no-preview canvas#view { display: none; }
+html.control #panel { position: static; width: 100%; border-left: 0; overflow: visible; backdrop-filter: none; background: #080b10; }
+html.control #panel h1 { margin-right: 0; }
+html.control .fab { display: none; }
+html.control .slider { grid-template-columns: minmax(60px, 30%) 1fr 36px; }
+html.control .colors { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
+html.control select { max-width: 100%; }

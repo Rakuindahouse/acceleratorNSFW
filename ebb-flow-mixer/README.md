@@ -67,7 +67,9 @@ OBS の「仮想カメラ」も同じ手順で使えます。
    - **Spout**: OBS に [Spout2 プラグイン](https://github.com/Off-World-Live/obs-spout2-plugin) を入れ、ツール → Spout Output Settings → Start
    - **NDI**: OBS に [DistroAV (旧 obs-ndi)](https://github.com/DistroAV/DistroAV) と NDI Runtime を入れ、ツール → DistroAV NDI Settings → Main Output をオン
 
-操作は元のウィンドウで行い、出力ウィンドウには操作パネルが映りません。
+出力ウィンドウを開くと、元のウィンドウは **操作専用モード**（上に小さなプレビュー、下に操作パネルの縦長レイアウト）になります。
+Resolume などの横に置く場合は、ウィンドウの幅を縮めて画面の端に寄せてください。`start.bat` から起動していれば「右端に縦長」ボタンで自動で寄せられます。
+「プレビュー」ボタンでプレビューを隠すと、操作パネルだけになります。出力ウィンドウを閉じると元の表示に戻ります。
 OBS のキャンバス解像度を出力解像度と合わせると綺麗に出ます。
 
 ## 素材について

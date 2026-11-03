@@ -203,6 +203,12 @@ function resize() {
   let w = Math.max(2, Math.round(innerWidth * dpr)), h = Math.max(2, Math.round(innerHeight * dpr));
   const fixed = /^(\d+)x(\d+)$/.exec(S.outRes || '');
   if (fixed) { w = +fixed[1]; h = +fixed[2]; }
+  else if (outWin && !outWin.closed && outWin.innerWidth > 50) {
+    // 操作専用モードでは出力ウィンドウの大きさで描く
+    const od = Math.min(outWin.devicePixelRatio || 1, 2);
+    w = Math.round(outWin.innerWidth * od); h = Math.round(outWin.innerHeight * od);
+  }
+  canvas.style.aspectRatio = `${w} / ${h}`;
   if (w === W && h === H) return;
   W = canvas.width = w; H = canvas.height = h;
   for (const k of ['scene', 'fbA', 'fbB']) {
@@ -488,7 +494,7 @@ function frame() {
 
   // 出力ウィンドウへコピー（描画直後なので preserveDrawingBuffer 不要）
   if (outCtx) {
-    if (outWin.closed) { outWin = outCtx = null; $('#btnOut').classList.remove('on'); }
+    if (outWin.closed) { outWin = outCtx = null; $('#btnOut').classList.remove('on'); setControlMode(false); }
     else {
       const oc = outCtx.canvas;
       if (oc.width !== W || oc.height !== H) { oc.width = W; oc.height = H; }
@@ -638,7 +644,25 @@ function openOutput() {
   outCtx = c.getContext('2d', { alpha: false });
   d.addEventListener('dblclick', () => (d.fullscreenElement ? d.exitFullscreen() : d.documentElement.requestFullscreen()));
   $('#btnOut').classList.add('on');
+  setControlMode(true);
 }
+
+// 操作専用モード：出力中は元ウィンドウを「小さなプレビュー＋操作パネル」の縦長レイアウトにする
+function setControlMode(on) {
+  document.documentElement.classList.toggle('control', on);
+  document.body.classList.remove('ui-hidden');
+  $('#controlBar').hidden = !on;
+}
+$('#btnPreview').onclick = () => {
+  const off = document.documentElement.classList.toggle('no-preview');
+  $('#btnPreview').classList.toggle('on', !off);
+};
+$('#btnSlim').onclick = () => {
+  // アプリウィンドウ（start.bat 起動）なら画面右端に縦長で寄せる。普通のタブでは手動で幅を縮めてください
+  const w = 380;
+  try { window.resizeTo(w, screen.availHeight); window.moveTo(screen.availLeft + screen.availWidth - w, screen.availTop); } catch (e) {}
+};
+$('#btnCloseOut').onclick = () => { if (outWin && !outWin.closed) outWin.close(); };
 $('#btnOut').onclick = openOutput;
 $('#outRes').addEventListener('change', (e) => { S.outRes = e.target.value; save(); resize(); nextLayout(0); });
 addEventListener('beforeunload', () => { if (outWin && !outWin.closed) outWin.close(); });
@@ -651,6 +675,7 @@ $('#btnReset').onclick = () => { defaults(); syncBuiltin(); syncUi(); save(); ne
 let spaceHeld = false;
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+  if (e.code === 'KeyH' && document.documentElement.classList.contains('control')) return;
   if (e.code === 'Space') { e.preventDefault(); spaceHeld = true; setBurst(true); }
   else if (e.code === 'KeyH') toggleUi();
   else if (e.code === 'KeyF') toggleFull();
