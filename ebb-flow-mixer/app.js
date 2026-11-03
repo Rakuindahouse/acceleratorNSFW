@@ -20,6 +20,14 @@ const PARAMS = [
   ['motion', 'after', '残像', 0, 0.97, 0.01, 0.35],
   ['motion', 'zoom', 'ズーム', 1, 4, 0.01, 1.4],
   ['motion', 'burstHz', '明滅速度', 2, 30, 1, 15],
+  ['audio', 'aGain', '入力感度', 0, 4, 0.01, 1.2],
+  ['audio', 'aBeat', 'ビート切替', 0, 1, 0.01, 0.6],
+  ['audio', 'aBeatMin', '最短間隔(秒)', 0.05, 2, 0.01, 0.25],
+  ['audio', 'aWarp', '低音→うねり', 0, 3, 0.01, 1],
+  ['audio', 'aSpeed', '音量→流速', 0, 3, 0.01, 1],
+  ['audio', 'aBright', '高音→明るさ', 0, 2, 0.01, 0.5],
+  ['audio', 'aFlash', 'ビート→光', 0, 1, 0.01, 0.3],
+  ['audio', 'aAfter', '静けさ→残像', 0, 1, 0.01, 0.4],
   ['color', 'hue', '色相', -180, 180, 1, 0],
   ['color', 'sat', '彩度', 0, 2.5, 0.01, 1],
   ['color', 'bri', '明るさ', 0, 2.5, 0.01, 1],
@@ -398,7 +406,7 @@ function drawLayout(L, alpha) {
     gl.uniform1f(u.uScrAspect, W / H);
     gl.uniform1f(u.uZoom, live ? 1 : p.zoom);
     gl.uniform1f(u.uTime, flowTime);
-    gl.uniform1f(u.uWarp, S.warp);
+    gl.uniform1f(u.uWarp, cur.warp);
     gl.uniform1f(u.uSeed, p.seed);
     gl.uniform1f(u.uAlpha, alpha);
     gl.uniform1f(u.uRot, live ? 0 : p.rot);
@@ -417,7 +425,13 @@ function frame() {
   resize();
   const now = performance.now() / 1000;
   const dt = Math.min(0.1, now - last); last = now;
-  flowTime += dt * S.speed;
+  // 音で各パラメータを動かす
+  const A = updateAudio(dt, now);
+  cur.warp = S.warp + S.aWarp * A.low * 2;
+  cur.after = Math.min(0.97, S.after + (A.active ? S.aAfter * 0.5 * (1 - Math.min(1, A.vol * 2.5)) : 0));
+  cur.bri = S.bri * (1 + S.aBright * A.high * 0.8 + S.aFlash * A.flash * 0.6);
+  flowTime += dt * S.speed * (1 + S.aSpeed * A.vol * 3);
+  if (A.beat && S.aBeat > 0 && !burst && now - lastExchange >= S.aBeatMin) nextLayout(Math.min(S.fade, 0.12));
 
   if (!layout) nextLayout(0);
   if (burst) {
@@ -450,9 +464,9 @@ function frame() {
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, targets.scene.tex);
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, read.tex);
   gl.uniform1i(fbProg.u.uScene, 0); gl.uniform1i(fbProg.u.uPrev, 1);
-  gl.uniform1f(fbProg.u.uAfter, S.after);
+  gl.uniform1f(fbProg.u.uAfter, cur.after);
   gl.uniform1f(fbProg.u.uTime, flowTime);
-  gl.uniform1f(fbProg.u.uWarp, S.warp);
+  gl.uniform1f(fbProg.u.uWarp, cur.warp);
   bindPos(quadBuf); gl.drawArrays(gl.TRIANGLES, 0, 6);
   targets.fbA = write; targets.fbB = read;
 
@@ -463,7 +477,7 @@ function frame() {
   const u = colorProg.u;
   gl.uniform1i(u.uSrc, 0);
   gl.uniform1f(u.uHue, S.hue * Math.PI / 180);
-  gl.uniform1f(u.uSat, S.sat); gl.uniform1f(u.uBri, S.bri); gl.uniform1f(u.uCon, S.con); gl.uniform1f(u.uGamma, S.gamma);
+  gl.uniform1f(u.uSat, S.sat); gl.uniform1f(u.uBri, cur.bri); gl.uniform1f(u.uCon, S.con); gl.uniform1f(u.uGamma, S.gamma);
   gl.uniform1f(u.uMapMix, S.mapMix); gl.uniform1f(u.uTintMix, S.tintMix); gl.uniform1f(u.uInvert, S.invert);
   gl.uniform1f(u.uVignette, S.vignette); gl.uniform1f(u.uAspect, W / H);
   gl.uniform3fv(u.uMapA, hex(S.mapA)); gl.uniform3fv(u.uMapB, hex(S.mapB)); gl.uniform3fv(u.uMapC, hex(S.mapC)); gl.uniform3fv(u.uTint, hex(S.tint));
@@ -607,6 +621,148 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyN') nextLayout();
 });
 addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceHeld = false; setBurst(false); } });
+
+// ---------------------------------------------------------------- 音
+// 入力（マイク/ライン・PCの音・音声ファイル）を解析して 低/中/高 とビートを出す
+const cur = { warp: S.warp, after: S.after, bri: S.bri };
+let actx = null, analyser = null, inputNode = null, inputStream = null, playerNode = null;
+let freq = null;
+const env = { low: 0, mid: 0, high: 0, vol: 0, prevLow: 0, riseAvg: 0, flash: 0, lastBeat: 0 };
+const player = $('#player');
+
+function ensureAudio() {
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.2;
+    freq = new Uint8Array(analyser.frequencyBinCount);
+  }
+  actx.resume();
+}
+
+function stopAudio() {
+  if (inputNode) { try { inputNode.disconnect(); } catch (e) {} }
+  inputNode = null;
+  if (inputStream) inputStream.getTracks().forEach((t) => t.stop());
+  inputStream = null;
+  player.pause();
+  player.hidden = true;
+  $('#audioName').textContent = '音の入力なし';
+}
+
+function useStream(stream, label) {
+  ensureAudio();
+  stopAudio();
+  if (!stream.getAudioTracks().length) { alert('音声が含まれていません。共有時に「音声を共有」をオンにしてください。'); stream.getTracks().forEach((t) => t.stop()); return; }
+  inputStream = stream;
+  inputNode = actx.createMediaStreamSource(stream);
+  inputNode.connect(analyser);
+  $('#audioName').textContent = label;
+  stream.getAudioTracks()[0].addEventListener('ended', stopAudio);
+}
+
+const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+$('#btnMic').onclick = async () => {
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach((t) => t.stop());
+  } catch (e) { alert('マイクの許可が必要です: ' + e.message); return; }
+  const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
+  const sel = $('#micSelect');
+  sel.innerHTML = '';
+  devs.forEach((d, i) => {
+    const o = document.createElement('option');
+    o.value = d.deviceId; o.textContent = d.label || `入力 ${i + 1}`;
+    sel.appendChild(o);
+  });
+  $('#micPick').hidden = false;
+};
+$('#btnMicAdd').onclick = async () => {
+  const sel = $('#micSelect');
+  $('#micPick').hidden = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: sel.value }, ...RAW_AUDIO } });
+    useStream(stream, sel.selectedOptions[0]?.textContent || 'マイク');
+  } catch (e) { alert('音声入力を開けませんでした: ' + e.message); }
+};
+
+// Chrome / Edge (Windows) なら画面共有ダイアログで「システム音声を共有」を選ぶとPCの音が取れる
+$('#btnSys').onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: RAW_AUDIO, systemAudio: 'include' });
+    stream.getVideoTracks().forEach((t) => { t.enabled = false; });
+    useStream(stream, 'PCの音');
+  } catch (e) { if (e.name !== 'NotAllowedError') alert('PCの音を取り込めませんでした: ' + e.message); }
+};
+
+$('#audioInput').addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  ensureAudio();
+  stopAudio();
+  if (player.src.startsWith('blob:')) URL.revokeObjectURL(player.src);
+  player.src = URL.createObjectURL(f);
+  player.hidden = false;
+  if (!playerNode) playerNode = actx.createMediaElementSource(player);
+  playerNode.connect(analyser);
+  playerNode.connect(actx.destination); // ファイルはスピーカーにも鳴らす
+  inputNode = playerNode;
+  player.play().catch(() => {});
+  $('#audioName').textContent = f.name;
+});
+$('#btnAudioStop').onclick = stopAudio;
+
+function band(a, b) {
+  let s = 0;
+  for (let i = a; i < b; i++) s += freq[i];
+  const v = s / (b - a) / 255;
+  return Math.max(0, (v - 0.25) / 0.75) * S.aGain;
+}
+const follow = (e, v) => e + (v - e) * (v > e ? 0.6 : 0.12);
+
+function updateAudio(dt, now) {
+  const out = { active: false, low: 0, mid: 0, high: 0, vol: 0, beat: false, flash: 0 };
+  if (!analyser || !inputNode || (inputNode === playerNode && player.paused)) {
+    env.low = env.mid = env.high = env.vol = 0;
+    drawMeter(out);
+    return out;
+  }
+  analyser.getByteFrequencyData(freq);
+  const hz = actx.sampleRate / analyser.fftSize; // 1bin あたりの周波数
+  const bin = (f) => Math.max(1, Math.min(freq.length, Math.round(f / hz)));
+  const low = band(bin(30), bin(160)), mid = band(bin(160), bin(2000)), high = band(bin(2000), bin(11000));
+  env.low = follow(env.low, low); env.mid = follow(env.mid, mid); env.high = follow(env.high, high);
+  env.vol = follow(env.vol, (low + mid + high) / 3);
+  // ビート：低音が直近の平均を一気に超えたら
+  // ビート：低音が急に立ち上がったら（直近の立ち上がり平均と比べる）
+  const rise = Math.max(0, low - env.prevLow);
+  env.prevLow = low;
+  const thr = Math.max(0.03, env.riseAvg * (1.5 + (1 - S.aBeat) * 4));
+  let beat = false;
+  if (rise > thr && low > 0.1 && now - env.lastBeat > S.aBeatMin) { beat = true; env.lastBeat = now; env.flash = 1; }
+  env.riseAvg += (rise - env.riseAvg) * Math.min(1, dt * 2);
+  env.flash = Math.max(0, env.flash - dt * 5);
+  Object.assign(out, { active: true, low: env.low, mid: env.mid, high: env.high, vol: env.vol, beat, flash: env.flash });
+  drawMeter(out);
+  return out;
+}
+
+const meter = $('#meter'), mctx = meter.getContext('2d');
+function drawMeter(a) {
+  if (document.body.classList.contains('ui-hidden')) return;
+  mctx.clearRect(0, 0, meter.width, meter.height);
+  const bars = [['低', a.low, '#3d6dff'], ['中', a.mid, '#6fb6e8'], ['高', a.high, '#d8f0ff']];
+  const bw = (meter.width - 40) / 3;
+  bars.forEach(([, v, c], i) => {
+    mctx.fillStyle = c;
+    mctx.fillRect(i * (bw + 4), 0, Math.min(1, v) * bw, meter.height);
+  });
+  mctx.fillStyle = a.flash > 0 ? `rgba(255,255,255,${a.flash})` : '#1c2530';
+  mctx.fillRect(meter.width - 28, 0, 28, meter.height);
+}
 
 // ---------------------------------------------------------------- 起動
 buildSliders();

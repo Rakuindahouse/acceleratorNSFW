@@ -39,6 +39,23 @@
   </section>
 
   <section>
+    <h2>音</h2>
+    <div class="row">
+      <button id="btnMic">マイク / ライン</button>
+      <button id="btnSys">PCの音</button>
+      <label class="btn">音声ファイル<input id="audioInput" type="file" accept="audio/*,video/*" hidden></label>
+      <button id="btnAudioStop">停止</button>
+    </div>
+    <div id="micPick" class="row" hidden>
+      <select id="micSelect"></select>
+      <button id="btnMicAdd">使う</button>
+    </div>
+    <audio id="player" controls loop hidden></audio>
+    <div class="meter"><canvas id="meter" width="300" height="36"></canvas><span id="audioName">音の入力なし</span></div>
+    <div id="sliders-audio"></div>
+  </section>
+
+  <section>
     <h2>動き</h2>
     <div id="sliders-motion"></div>
   </section>
@@ -57,6 +74,7 @@
 
   <section>
     <button id="btnReset" class="wide">すべて初期値に戻す</button>
+    <p class="hint">マイク／ライン：オーディオIF・VB-CABLE・ステレオミキサー等。PCの音：共有画面を選び「システム音声を共有」をオン。スライダーを 0 にするとその反応はオフ。</p>
     <p class="hint">キー：H パネル / F 全画面 / N 次の配置 / Space 押してる間 明滅</p>
   </section>
 </aside>
