@@ -76,7 +76,8 @@ audio { width: 100%; height: 32px; margin-bottom: 8px; }
 /* 操作専用モード（出力ウィンドウ使用中） */
 html.control { height: auto; overflow-x: hidden; overflow-y: auto; background: #080b10; }
 html.control body { height: auto; overflow: visible; background: #080b10; }
-html.control canvas#view { position: sticky; top: 0; z-index: 5; width: 100%; height: auto; border-bottom: 1px solid #26313e; }
+html.control canvas#view { position: sticky; top: 0; z-index: 5; width: 100%; height: auto; max-height: 30vh; object-fit: contain; background: #000; border-bottom: 1px solid #26313e; }
+html.control #panel { max-width: 720px; margin: 0 auto; }
 html.control.no-preview canvas#view { display: none; }
 html.control #panel { position: static; width: 100%; border-left: 0; overflow: visible; backdrop-filter: none; background: #080b10; }
 html.control #panel h1 { margin-right: 0; }
