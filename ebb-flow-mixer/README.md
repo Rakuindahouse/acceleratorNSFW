@@ -5,11 +5,8 @@
 
 ## 起動
 
-- **Windows**: `start.bat` をダブルクリック → ブラウザで `http://localhost:8787/` が開きます
-  （Python か Node.js が必要。Chrome / Edge 推奨）
-- **mac / Linux**: `start.command`
-
-`index.html` を直接開くとサイト素材が読み込めないので、必ずスクリプトから起動してください。
+`index.html` をダブルクリックするだけで動きます（Chrome / Edge 推奨）。インストールは不要です。
+既定のブラウザが Chrome / Edge 以外の場合は、`index.html` を Chrome の画面にドラッグしてください。
 
 ## できること
 

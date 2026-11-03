@@ -219,7 +219,7 @@ function addImageSource(url, name, opts = {}) {
   img.decoding = 'async';
   img.onload = () => { uploadTexture(src.tex, img); src.aspect = img.naturalWidth / img.naturalHeight; src.ready = true; };
   img.onerror = () => console.warn('画像を読み込めませんでした', url);
-  img.src = url;
+  img.src = (window.BUILTIN_DATA && window.BUILTIN_DATA[url]) || url;
   src.el = img;
   sources.push(src);
   return src;
