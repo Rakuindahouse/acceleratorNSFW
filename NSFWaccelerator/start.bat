@@ -1,6 +1,12 @@
 @echo off
-rem Launch as a Chrome (or Edge) app window that keeps rendering even when hidden or captured by OBS.
+rem Launch NSFWaccelerator as a Chrome (or Edge) app window.
+rem Uses its own browser profile so it keeps rendering when hidden or captured by OBS.
 cd /d "%~dp0"
-set FLAGS=--user-data-dir="%LOCALAPPDATA%\ebb-flow-mixer-browser" --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required --window-size=1280,800
-start "" chrome %FLAGS% --app="file:///%~dp0index.html"
-if errorlevel 1 start "" msedge %FLAGS% --app="file:///%~dp0index.html"
+set "APPURL=file:///%~dp0index.html"
+set "APPURL=%APPURL:\=/%"
+set "APPURL=%APPURL: =%%20%"
+set "PROFILE=%LOCALAPPDATA%\NSFWaccelerator-browser"
+set FLAGS=--user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required --window-size=1280,800
+start "" chrome %FLAGS% --app="%APPURL%"
+if errorlevel 1 start "" msedge %FLAGS% --app="%APPURL%"
+if errorlevel 1 start "" "%~dp0index.html"
