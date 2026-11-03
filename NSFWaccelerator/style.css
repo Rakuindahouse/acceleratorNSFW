@@ -85,3 +85,9 @@ html.control .fab { display: none; }
 html.control .slider { grid-template-columns: minmax(60px, 30%) 1fr 36px; }
 html.control .colors { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
 html.control select { max-width: 100%; }
+
+/* 操作パネルを別窓に出したとき */
+html.ctlwin body { margin: 0; }
+html.ctlwin #panel { max-width: none; padding: 10px 12px 24px; }
+html.ctlwin .slider { grid-template-columns: 74px 1fr 34px; gap: 6px; }
+html.undocked .fab { display: none; }

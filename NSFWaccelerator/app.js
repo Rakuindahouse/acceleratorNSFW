@@ -2,7 +2,8 @@
 // ebb flow mixer
 // 画面を斜めに分割したパネルに画像・動画・Spout(カメラ)を流し、全体の色を変えるミキサー。
 
-const $ = (s) => document.querySelector(s);
+var ctlWin = null; // 操作パネルを出した別窓
+const $ = (s) => document.querySelector(s) || (ctlWin && !ctlWin.closed ? ctlWin.document.querySelector(s) : null);
 const canvas = $('#view');
 const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, antialias: true });
 if (!gl) alert('WebGL2 が使えません。Chrome / Edge で開いてください。');
@@ -429,8 +430,18 @@ function drawLayout(L, alpha) {
 
 function hex(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
 
+// 出力ウィンドウがあるときはそちらのタイミングで描く（元ウィンドウを最小化しても止まらない）
+let loopId = 0, lastTick = 0;
+function schedule() {
+  const id = ++loopId;
+  const w = outWin && !outWin.closed ? outWin : window;
+  w.requestAnimationFrame(() => { if (id === loopId) frame(); });
+}
+setInterval(() => { if (performance.now() - lastTick > 400) schedule(); }, 250);
+
 function frame() {
-  requestAnimationFrame(frame);
+  lastTick = performance.now();
+  schedule();
   resize();
   const now = performance.now() / 1000;
   const dt = Math.min(0.1, now - last); last = now;
@@ -649,7 +660,7 @@ function openOutput() {
 
 // 操作専用モード：出力中は元ウィンドウを「小さなプレビュー＋操作パネル」の縦長レイアウトにする
 function setControlMode(on) {
-  document.documentElement.classList.toggle('control', on);
+  document.documentElement.classList.toggle('control', on && !ctlWin);
   document.body.classList.remove('ui-hidden');
   $('#controlBar').hidden = !on;
 }
@@ -657,31 +668,63 @@ $('#btnPreview').onclick = () => {
   const off = document.documentElement.classList.toggle('no-preview');
   $('#btnPreview').classList.toggle('on', !off);
 };
-$('#btnSlim').onclick = () => {
-  // ブラウザが許す場合だけ画面右端に縦長で寄せる。効かないときは手動で幅を縮めてください
-  const w = 380;
-  try { window.resizeTo(w, screen.availHeight); window.moveTo(screen.availLeft + screen.availWidth - w, screen.availTop); } catch (e) {}
-};
+// 操作パネルを細い別窓へ（普通のウィンドウは約500pxより細くできないため）
+const panelEl = $('#panel');
+function openControlWindow() {
+  if (ctlWin && !ctlWin.closed) { dockBack(); return; }
+  const w = 340, h = screen.availHeight;
+  const left = (screen.availLeft || 0) + screen.availWidth - w, top = screen.availTop || 0;
+  ctlWin = window.open('', 'ebb-flow-control', `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+  if (!ctlWin) { alert('ポップアップがブロックされました。アドレスバー右のアイコンから許可してください。'); return; }
+  const d = ctlWin.document;
+  d.title = 'NSFWaccelerator 操作';
+  d.head.innerHTML = '<meta charset="UTF-8">';
+  const link = d.createElement('link');
+  link.rel = 'stylesheet'; link.href = new URL('style.css', location.href).href;
+  d.head.appendChild(link);
+  d.documentElement.className = 'control ctlwin';
+  d.body.innerHTML = '';
+  d.body.appendChild(panelEl);
+  ctlWin.addEventListener('keydown', onKeyDown);
+  ctlWin.addEventListener('keyup', onKeyUp);
+  ctlWin.addEventListener('pointerup', onPointerUp);
+  ctlWin.addEventListener('pagehide', dockBack);
+  document.documentElement.classList.remove('control');
+  document.documentElement.classList.add('undocked');
+  $('#btnDock').textContent = '元の窓に戻す';
+}
+function dockBack() {
+  if (panelEl.ownerDocument !== document) document.body.appendChild(panelEl);
+  const w = ctlWin; ctlWin = null;
+  if (w && !w.closed) w.close();
+  document.documentElement.classList.remove('undocked');
+  $('#btnDock').textContent = '細い別窓に';
+  setControlMode(!!(outWin && !outWin.closed));
+}
+$('#btnDock').onclick = openControlWindow;
 $('#btnCloseOut').onclick = () => { if (outWin && !outWin.closed) outWin.close(); };
 $('#btnOut').onclick = openOutput;
 $('#outRes').addEventListener('change', (e) => { S.outRes = e.target.value; save(); resize(); nextLayout(0); });
-addEventListener('beforeunload', () => { if (outWin && !outWin.closed) outWin.close(); });
+addEventListener('beforeunload', () => { if (outWin && !outWin.closed) outWin.close(); if (ctlWin && !ctlWin.closed) ctlWin.close(); });
 const burstBtn = $('#btnBurst');
 const setBurst = (on) => { burst = on; burstBtn.classList.toggle('on', on); };
 burstBtn.addEventListener('pointerdown', () => setBurst(true));
-addEventListener('pointerup', () => { if (burst && !spaceHeld) setBurst(false); });
+function onPointerUp() { if (burst && !spaceHeld) setBurst(false); }
+addEventListener('pointerup', onPointerUp);
 $('#btnReset').onclick = () => { defaults(); syncBuiltin(); syncUi(); save(); nextLayout(); };
 
 let spaceHeld = false;
-addEventListener('keydown', (e) => {
+function onKeyDown(e) {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
-  if (e.code === 'KeyH' && document.documentElement.classList.contains('control')) return;
+  if (e.code === 'KeyH' && (ctlWin || document.documentElement.classList.contains('control'))) return;
   if (e.code === 'Space') { e.preventDefault(); spaceHeld = true; setBurst(true); }
   else if (e.code === 'KeyH') toggleUi();
   else if (e.code === 'KeyF') toggleFull();
   else if (e.code === 'KeyN') nextLayout();
-});
-addEventListener('keyup', (e) => { if (e.code === 'Space') { spaceHeld = false; setBurst(false); } });
+}
+function onKeyUp(e) { if (e.code === 'Space') { spaceHeld = false; setBurst(false); } }
+addEventListener('keydown', onKeyDown);
+addEventListener('keyup', onKeyUp);
 
 // ---------------------------------------------------------------- 音
 // 入力（マイク/ライン・PCの音・音声ファイル）を解析して 低/中/高 とビートを出す
@@ -752,7 +795,8 @@ $('#btnMicAdd').onclick = async () => {
 // Chrome / Edge (Windows) なら画面共有ダイアログで「システム音声を共有」を選ぶとPCの音が取れる
 $('#btnSys').onclick = async () => {
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: RAW_AUDIO, systemAudio: 'include' });
+    const nav = panelEl.ownerDocument.defaultView.navigator;
+    const stream = await nav.mediaDevices.getDisplayMedia({ video: true, audio: RAW_AUDIO, systemAudio: 'include' });
     stream.getVideoTracks().forEach((t) => { t.enabled = false; });
     useStream(stream, 'PCの音');
   } catch (e) { if (e.name !== 'NotAllowedError') alert('PCの音を取り込めませんでした: ' + e.message); }
