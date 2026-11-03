@@ -807,10 +807,30 @@ $('#btnMic').onclick = async () => {
 $('#btnMicAdd').onclick = async () => {
   const sel = $('#micSelect');
   $('#micPick').hidden = true;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: sel.value }, ...RAW_AUDIO } });
-    useStream(stream, sel.selectedOptions[0]?.textContent || 'マイク');
-  } catch (e) { alert('音声入力を開けませんでした: ' + e.message); }
+  const label = sel.selectedOptions[0]?.textContent || 'マイク';
+  // 機器によって通らない条件があるので、だんだんゆるめて試す
+  const tries = [
+    { deviceId: { exact: sel.value }, ...RAW_AUDIO },
+    { deviceId: { exact: sel.value } },
+    { deviceId: sel.value, ...RAW_AUDIO },
+    true,
+  ];
+  let lastErr = null;
+  for (const audio of tries) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio });
+      try { useStream(stream, audio === true ? label + '（既定の入力）' : label); }
+      catch (e) { stream.getTracks().forEach((t) => t.stop()); throw e; }
+      return;
+    } catch (e) { lastErr = e; console.warn('音声入力の試行に失敗', audio, e); }
+  }
+  const hint = {
+    NotReadableError: '他のアプリ（DAW・Resolume・通話アプリなど）がこの入力を独占しているかもしれません。そのアプリを閉じるか、Windowsのサウンド設定 → 入力デバイスのプロパティで「アプリケーションによりこのデバイスを排他的に制御できるようにする」をオフにしてください。',
+    NotAllowedError: 'マイクの使用がブロックされています。アドレスバー左のアイコン → マイク を「許可」にして再読み込みしてください。Windowsの設定 → プライバシー → マイク で「デスクトップアプリにマイクへのアクセスを許可」もオンにしてください。',
+    NotFoundError: '入力機器が見つかりません。ケーブルや接続を確認してください。',
+    OverconstrainedError: 'この機器は指定の条件で開けませんでした。',
+  }[lastErr && lastErr.name] || '';
+  alert(`音声入力を開けませんでした（${lastErr && lastErr.name}）: ${lastErr && lastErr.message}\n\n${hint}`);
 };
 
 // Chrome / Edge (Windows) なら画面共有ダイアログで「システム音声を共有」を選ぶとPCの音が取れる
