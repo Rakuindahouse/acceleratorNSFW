@@ -658,7 +658,7 @@ $('#btnPreview').onclick = () => {
   $('#btnPreview').classList.toggle('on', !off);
 };
 $('#btnSlim').onclick = () => {
-  // アプリウィンドウ（start.bat 起動）なら画面右端に縦長で寄せる。普通のタブでは手動で幅を縮めてください
+  // ブラウザが許す場合だけ画面右端に縦長で寄せる。効かないときは手動で幅を縮めてください
   const w = 380;
   try { window.resizeTo(w, screen.availHeight); window.moveTo(screen.availLeft + screen.availWidth - w, screen.availTop); } catch (e) {}
 };

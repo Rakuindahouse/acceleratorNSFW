@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Launch NSFWaccelerator as a Chrome (or Edge) app window.
+rem Launch NSFWaccelerator in a dedicated Chrome (or Edge) window.
 cd /d "%~dp0"
 
 if not exist "%~dp0index.html" (
@@ -15,12 +15,10 @@ for %%P in ("%ProgramFiles%\Google\Chrome\Application\chrome.exe" "%ProgramFiles
   if not defined BROWSER if exist "%%~P" set "BROWSER=%%~P"
 )
 
-set "APPURL=file:///%~dp0index.html"
-set "APPURL=%APPURL:\=/%"
 set "PROFILE=%LOCALAPPDATA%\NSFWaccelerator-app"
 
 echo Browser : %BROWSER%
-echo App     : %APPURL%
+echo App     : %~dp0index.html
 
 if not defined BROWSER (
   echo Chrome / Edge not found. Opening index.html with the default browser.
@@ -29,5 +27,5 @@ if not defined BROWSER (
   exit /b 0
 )
 
-start "" "%BROWSER%" --user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required --window-size=1280,800 --app="%APPURL%"
+start "" "%BROWSER%" --user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required --window-size=1280,800 --new-window "%~dp0index.html"
 timeout /t 5 >nul
