@@ -4,7 +4,6 @@ rem Uses its own browser profile so it keeps rendering when hidden or captured b
 cd /d "%~dp0"
 set "APPURL=file:///%~dp0index.html"
 set "APPURL=%APPURL:\=/%"
-set "APPURL=%APPURL: =%%20%"
 set "PROFILE=%LOCALAPPDATA%\NSFWaccelerator-browser"
 set FLAGS=--user-data-dir="%PROFILE%" --no-first-run --no-default-browser-check --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --autoplay-policy=no-user-gesture-required --window-size=1280,800
 start "" chrome %FLAGS% --app="%APPURL%"
