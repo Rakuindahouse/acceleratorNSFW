@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ebb flow mixer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<button id="toggleUi" class="fab" title="パネル表示切替 (H)">☰</button>
+
+<aside id="panel">
+  <header>
+    <h1>ebb flow mixer</h1>
+    <div class="row">
+      <button id="btnFull" title="F">全画面</button>
+      <button id="btnNext" title="N">次の配置</button>
+      <button id="btnBurst" title="Space長押し">明滅</button>
+      <button id="btnShot">画像保存</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>ソース</h2>
+    <div class="row">
+      <label class="btn">画像・動画を追加<input id="fileInput" type="file" accept="image/*,video/*" multiple hidden></label>
+      <button id="btnCam">Spout / カメラ</button>
+    </div>
+    <div id="camPick" class="row" hidden>
+      <select id="camSelect"></select>
+      <button id="btnCamAdd">追加</button>
+    </div>
+    <p class="hint">ドラッグ＆ドロップ・貼り付けでも追加できます。Spout は SpoutCam 経由で「カメラ」として選べます。</p>
+    <div id="builtinList" class="list"></div>
+    <div id="userList" class="list"></div>
+    <div id="sliders-source"></div>
+  </section>
+
+  <section>
+    <h2>動き</h2>
+    <div id="sliders-motion"></div>
+  </section>
+
+  <section>
+    <h2>色</h2>
+    <div id="presets" class="presets"></div>
+    <div id="sliders-color"></div>
+    <div class="colors">
+      <label>影<input type="color" id="mapA"></label>
+      <label>中間<input type="color" id="mapB"></label>
+      <label>光<input type="color" id="mapC"></label>
+      <label>色かぶり<input type="color" id="tint"></label>
+    </div>
+  </section>
+
+  <section>
+    <button id="btnReset" class="wide">すべて初期値に戻す</button>
+    <p class="hint">キー：H パネル / F 全画面 / N 次の配置 / Space 押してる間 明滅</p>
+  </section>
+</aside>
+
+<script src="builtin/manifest.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
