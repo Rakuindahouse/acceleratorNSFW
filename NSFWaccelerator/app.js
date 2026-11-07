@@ -58,13 +58,20 @@ const STORE_KEY = 'ebb-flow-mixer/settings';
 function defaults() {
   for (const p of PARAMS) S[p[1]] = p[6];
   Object.assign(S, COLOR_KEYS);
-  S.builtin = { materials: true, 'sea-blue': true, 'sea-white': true };
+  S.builtin = { original: true, materials: false, 'sea-blue': false, 'sea-white': false };
+  S.v = 2;
   S.outRes = 'window';
   S.spoutMax = 1280;
   S.spoutFlip = false;
 }
 defaults();
-try { Object.assign(S, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+  Object.assign(S, saved);
+  // 旧設定からの移行：サイトの画像はオフ、オリジナル素材はオン
+  if (saved.builtin && saved.v !== 2) S.builtin = { original: true, materials: false, 'sea-blue': false, 'sea-white': false };
+  S.v = 2;
+} catch (e) {}
 let saveTimer = 0;
 function save() {
   clearTimeout(saveTimer);
